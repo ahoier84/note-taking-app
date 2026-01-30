@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Note Taking App</title>
+    <title>Note Taking App - Firebase Edition</title>
     <style>
         * {
             margin: 0;
@@ -270,7 +270,7 @@
             background: white;
             border-radius: 16px;
             padding: 30px;
-            max-width: 500px;
+            max-width: 600px;
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
@@ -295,7 +295,6 @@
         .priority-medium { color: #3b82f6; }
         .priority-low { color: #6b7280; }
 
-        /* Mobile responsive */
         @media (max-width: 768px) {
             .container {
                 height: calc(100vh - 20px);
@@ -352,39 +351,83 @@
             align-items: center;
             gap: 5px;
             padding: 4px 8px;
-            background: #d1fae5;
-            color: #065f46;
             border-radius: 6px;
             font-size: 11px;
             font-weight: 600;
         }
 
-        .sync-icon {
-            animation: spin 2s linear infinite;
+        .sync-status.connected {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .sync-status.syncing {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .sync-status.offline {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .config-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .config-form input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .config-form label {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 5px;
+        }
+
+        .help-text {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+
+        .spinner {
+            animation: spin 1s linear infinite;
         }
 
         @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
+
+        code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
         <div class="header">
             <h1>📝 Note Taking App</h1>
             <div class="header-buttons">
                 <button class="btn btn-primary" onclick="app.newNote()">+ New Note</button>
                 <button class="btn btn-secondary" onclick="app.openImportModal()">Import</button>
                 <button class="btn btn-secondary" onclick="app.exportNotes()">Export</button>
-                <button class="btn btn-secondary" onclick="app.openSettingsModal()">Settings</button>
+                <button class="btn btn-secondary" onclick="app.openFirebaseSettings()">Firebase</button>
             </div>
         </div>
 
-        <!-- Main Content -->
         <div class="main-content">
-            <!-- Sidebar -->
             <div class="sidebar">
                 <div class="sort-controls">
                     <label>Sort By</label>
@@ -394,12 +437,9 @@
                         <button class="sort-btn" data-sort="priority" onclick="app.sortNotes('priority')">Priority</button>
                     </div>
                 </div>
-                <div class="notes-list" id="notesList">
-                    <!-- Notes will be rendered here -->
-                </div>
+                <div class="notes-list" id="notesList"></div>
             </div>
 
-            <!-- Editor -->
             <div class="editor" id="editor">
                 <div class="empty-state">
                     <div class="empty-state-icon">📄</div>
@@ -409,10 +449,55 @@
             </div>
         </div>
 
-        <!-- Status Bar -->
         <div class="status-bar">
             <div id="statusText">Ready</div>
             <div id="syncStatus"></div>
+        </div>
+    </div>
+
+    <!-- Firebase Config Modal -->
+    <div class="modal" id="firebaseModal">
+        <div class="modal-content">
+            <div class="modal-header">Firebase Configuration</div>
+            <div class="config-form">
+                <div>
+                    <label>API Key</label>
+                    <input type="text" id="apiKey" placeholder="AIzaSy...">
+                    <div class="help-text">From Firebase Console > Project Settings > General</div>
+                </div>
+                <div>
+                    <label>Auth Domain</label>
+                    <input type="text" id="authDomain" placeholder="your-project.firebaseapp.com">
+                </div>
+                <div>
+                    <label>Project ID</label>
+                    <input type="text" id="projectId" placeholder="your-project-id">
+                </div>
+                <div>
+                    <label>Storage Bucket</label>
+                    <input type="text" id="storageBucket" placeholder="your-project.appspot.com">
+                </div>
+                <div>
+                    <label>Messaging Sender ID</label>
+                    <input type="text" id="messagingSenderId" placeholder="123456789">
+                </div>
+                <div>
+                    <label>App ID</label>
+                    <input type="text" id="appId" placeholder="1:123456789:web:abc...">
+                </div>
+                <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin-top: 10px;">
+                    <strong>📘 Where to find these values:</strong><br>
+                    1. Go to <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a><br>
+                    2. Select your project<br>
+                    3. Click ⚙️ > Project Settings<br>
+                    4. Scroll to "Your apps" section<br>
+                    5. Copy the config values
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" onclick="app.saveFirebaseConfig()">Save & Connect</button>
+                <button class="btn btn-secondary" onclick="app.closeModal('firebaseModal')">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -428,28 +513,9 @@
         </div>
     </div>
 
-    <!-- Settings Modal -->
-    <div class="modal" id="settingsModal">
-        <div class="modal-content">
-            <div class="modal-header">Settings</div>
-            <div class="form-group">
-                <label>Storage</label>
-                <p style="font-size: 12px; color: #6b7280; margin-bottom: 10px;">
-                    Notes are stored in your browser's local storage. Export regularly to backup.
-                </p>
-            </div>
-            <div class="form-group">
-                <label>Theme (Coming Soon)</label>
-                <select disabled>
-                    <option>Light</option>
-                    <option>Dark</option>
-                </select>
-            </div>
-            <div class="modal-buttons">
-                <button class="btn btn-primary" onclick="app.closeModal('settingsModal')">Close</button>
-            </div>
-        </div>
-    </div>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <script>
         class NoteApp {
@@ -458,35 +524,162 @@
                 this.currentNote = null;
                 this.currentSort = 'date';
                 this.sortReverse = true;
-                this.loadNotes();
+                this.db = null;
+                this.firebaseInitialized = false;
+                this.unsubscribe = null;
+
+                // Try to load Firebase config
+                this.loadFirebaseConfig();
+                
                 this.render();
                 this.updateStatus();
             }
 
-            loadNotes() {
-                const stored = localStorage.getItem('notes');
-                if (stored) {
+            loadFirebaseConfig() {
+                const config = localStorage.getItem('firebaseConfig');
+                if (config) {
                     try {
-                        this.notes = JSON.parse(stored);
+                        const firebaseConfig = JSON.parse(config);
+                        this.initializeFirebase(firebaseConfig);
                     } catch (e) {
-                        console.error('Error loading notes:', e);
-                        this.notes = [];
+                        console.error('Error loading Firebase config:', e);
+                        this.showFirebaseSetupPrompt();
                     }
+                } else {
+                    this.showFirebaseSetupPrompt();
                 }
             }
 
-            saveNotes() {
-                try {
-                    localStorage.setItem('notes', JSON.stringify(this.notes));
-                    this.showSyncStatus();
-                    this.updateStatus();
-                } catch (e) {
-                    alert('Error saving notes: ' + e.message);
+            showFirebaseSetupPrompt() {
+                if (confirm('Firebase is not configured. Would you like to set it up now for cloud sync?\n\nYou\'ll need a Firebase project (free at console.firebase.google.com)')) {
+                    this.openFirebaseSettings();
                 }
+            }
+
+            initializeFirebase(config) {
+                try {
+                    if (!firebase.apps.length) {
+                        firebase.initializeApp(config);
+                    }
+                    this.db = firebase.firestore();
+                    this.firebaseInitialized = true;
+                    this.startRealtimeSync();
+                    this.updateSyncStatus('connected');
+                    console.log('Firebase initialized successfully');
+                } catch (error) {
+                    console.error('Firebase initialization error:', error);
+                    this.updateSyncStatus('offline');
+                    alert('Failed to connect to Firebase. Please check your configuration.');
+                }
+            }
+
+            startRealtimeSync() {
+                if (!this.firebaseInitialized) return;
+
+                this.updateSyncStatus('syncing');
+                
+                this.unsubscribe = this.db.collection('notes').onSnapshot((snapshot) => {
+                    this.notes = [];
+                    snapshot.forEach((doc) => {
+                        this.notes.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
+                    
+                    this.sortNotes(this.currentSort);
+                    this.updateStatus();
+                    this.updateSyncStatus('connected');
+                }, (error) => {
+                    console.error('Sync error:', error);
+                    this.updateSyncStatus('offline');
+                });
+            }
+
+            async saveToFirebase(note) {
+                if (!this.firebaseInitialized) return;
+
+                try {
+                    this.updateSyncStatus('syncing');
+                    const noteData = { ...note };
+                    delete noteData.id;
+
+                    if (note.id) {
+                        await this.db.collection('notes').doc(note.id).set(noteData);
+                    } else {
+                        const docRef = await this.db.collection('notes').add(noteData);
+                        note.id = docRef.id;
+                    }
+                    
+                    this.updateSyncStatus('connected');
+                } catch (error) {
+                    console.error('Save error:', error);
+                    alert('Failed to save to Firebase: ' + error.message);
+                    this.updateSyncStatus('offline');
+                }
+            }
+
+            async deleteFromFirebase(noteId) {
+                if (!this.firebaseInitialized || !noteId) return;
+
+                try {
+                    this.updateSyncStatus('syncing');
+                    await this.db.collection('notes').doc(noteId).delete();
+                    this.updateSyncStatus('connected');
+                } catch (error) {
+                    console.error('Delete error:', error);
+                    alert('Failed to delete from Firebase: ' + error.message);
+                    this.updateSyncStatus('offline');
+                }
+            }
+
+            openFirebaseSettings() {
+                const config = localStorage.getItem('firebaseConfig');
+                if (config) {
+                    const parsed = JSON.parse(config);
+                    document.getElementById('apiKey').value = parsed.apiKey || '';
+                    document.getElementById('authDomain').value = parsed.authDomain || '';
+                    document.getElementById('projectId').value = parsed.projectId || '';
+                    document.getElementById('storageBucket').value = parsed.storageBucket || '';
+                    document.getElementById('messagingSenderId').value = parsed.messagingSenderId || '';
+                    document.getElementById('appId').value = parsed.appId || '';
+                }
+                document.getElementById('firebaseModal').classList.add('active');
+            }
+
+            saveFirebaseConfig() {
+                const config = {
+                    apiKey: document.getElementById('apiKey').value.trim(),
+                    authDomain: document.getElementById('authDomain').value.trim(),
+                    projectId: document.getElementById('projectId').value.trim(),
+                    storageBucket: document.getElementById('storageBucket').value.trim(),
+                    messagingSenderId: document.getElementById('messagingSenderId').value.trim(),
+                    appId: document.getElementById('appId').value.trim()
+                };
+
+                if (!config.apiKey || !config.projectId) {
+                    alert('Please fill in at least API Key and Project ID');
+                    return;
+                }
+
+                localStorage.setItem('firebaseConfig', JSON.stringify(config));
+                this.closeModal('firebaseModal');
+                this.initializeFirebase(config);
+                alert('Firebase configured successfully! Your notes will now sync across all devices.');
+            }
+
+            updateSyncStatus(status) {
+                const syncStatus = document.getElementById('syncStatus');
+                const statusMap = {
+                    'connected': '🔄 Connected',
+                    'syncing': '<span class="spinner">⟳</span> Syncing...',
+                    'offline': '⚠️ Offline'
+                };
+                
+                syncStatus.innerHTML = `<span class="sync-status ${status}">${statusMap[status] || 'Unknown'}</span>`;
             }
 
             sortNotes(sortBy) {
-                // Toggle reverse if clicking same sort
                 if (this.currentSort === sortBy) {
                     this.sortReverse = !this.sortReverse;
                 } else {
@@ -494,13 +687,11 @@
                     this.sortReverse = true;
                 }
 
-                // Update active button
                 document.querySelectorAll('.sort-btn').forEach(btn => {
                     btn.classList.remove('active');
                 });
                 document.querySelector(`[data-sort="${sortBy}"]`).classList.add('active');
 
-                // Sort
                 if (sortBy === 'date') {
                     this.notes.sort((a, b) => {
                         return this.sortReverse 
@@ -541,7 +732,7 @@
                 this.renderNotesList();
             }
 
-            saveCurrentNote() {
+            async saveCurrentNote() {
                 const subject = document.getElementById('noteSubject').value.trim();
                 const priority = document.getElementById('notePriority').value;
                 const content = document.getElementById('noteContent').value.trim();
@@ -564,27 +755,37 @@
                 };
 
                 if (this.currentNote !== null) {
+                    note.id = this.notes[this.currentNote].id;
                     this.notes[this.currentNote] = note;
                 } else {
+                    note.id = null;
                     this.notes.push(note);
                     this.currentNote = this.notes.length - 1;
                 }
 
-                this.saveNotes();
+                if (this.firebaseInitialized) {
+                    await this.saveToFirebase(note);
+                }
+
                 this.sortNotes(this.currentSort);
                 alert('Note saved successfully!');
             }
 
-            deleteCurrentNote() {
+            async deleteCurrentNote() {
                 if (this.currentNote === null) {
                     alert('No note selected');
                     return;
                 }
 
                 if (confirm('Are you sure you want to delete this note?')) {
+                    const note = this.notes[this.currentNote];
+                    
+                    if (this.firebaseInitialized && note.id) {
+                        await this.deleteFromFirebase(note.id);
+                    }
+
                     this.notes.splice(this.currentNote, 1);
                     this.currentNote = null;
-                    this.saveNotes();
                     this.render();
                     alert('Note deleted successfully!');
                 }
@@ -676,15 +877,10 @@
             }
 
             updateStatus() {
-                document.getElementById('statusText').textContent = `${this.notes.length} note${this.notes.length !== 1 ? 's' : ''}`;
-            }
-
-            showSyncStatus() {
-                const syncStatus = document.getElementById('syncStatus');
-                syncStatus.innerHTML = '<span class="sync-status">✓ Saved</span>';
-                setTimeout(() => {
-                    syncStatus.innerHTML = '';
-                }, 2000);
+                const statusText = this.firebaseInitialized 
+                    ? `🔄 Firebase Sync | ${this.notes.length} note${this.notes.length !== 1 ? 's' : ''}`
+                    : `⚠️ Offline | ${this.notes.length} note${this.notes.length !== 1 ? 's' : ''}`;
+                document.getElementById('statusText').textContent = statusText;
             }
 
             exportNotes() {
@@ -693,7 +889,12 @@
                     return;
                 }
 
-                const dataStr = JSON.stringify(this.notes, null, 2);
+                const exportNotes = this.notes.map(note => {
+                    const { id, ...noteWithoutId } = note;
+                    return noteWithoutId;
+                });
+
+                const dataStr = JSON.stringify(exportNotes, null, 2);
                 const dataBlob = new Blob([dataStr], { type: 'application/json' });
                 const url = URL.createObjectURL(dataBlob);
                 const link = document.createElement('a');
@@ -707,12 +908,12 @@
                 document.getElementById('importModal').classList.add('active');
             }
 
-            handleImport(event) {
+            async handleImport(event) {
                 const file = event.target.files[0];
                 if (!file) return;
 
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = async (e) => {
                     try {
                         const imported = JSON.parse(e.target.result);
                         
@@ -728,27 +929,42 @@
                         );
 
                         if (merge) {
-                            this.notes = this.notes.concat(imported);
-                            alert(`Imported ${imported.length} notes. Total: ${this.notes.length}`);
+                            for (const note of imported) {
+                                note.id = null;
+                                this.notes.push(note);
+                                if (this.firebaseInitialized) {
+                                    await this.saveToFirebase(note);
+                                }
+                            }
                         } else {
+                            // Delete all existing
+                            if (this.firebaseInitialized) {
+                                for (const note of this.notes) {
+                                    if (note.id) {
+                                        await this.deleteFromFirebase(note.id);
+                                    }
+                                }
+                            }
+                            
                             this.notes = imported;
-                            alert(`Replaced with ${imported.length} notes`);
+                            if (this.firebaseInitialized) {
+                                for (const note of this.notes) {
+                                    note.id = null;
+                                    await this.saveToFirebase(note);
+                                }
+                            }
                         }
 
-                        this.saveNotes();
                         this.sortNotes(this.currentSort);
                         this.clearEditor();
                         this.closeModal('importModal');
+                        alert(`Import complete! Total notes: ${this.notes.length}`);
                     } catch (error) {
                         alert('Error importing notes: ' + error.message);
                     }
                 };
                 reader.readAsText(file);
-                event.target.value = ''; // Reset file input
-            }
-
-            openSettingsModal() {
-                document.getElementById('settingsModal').classList.add('active');
+                event.target.value = '';
             }
 
             closeModal(modalId) {
@@ -762,10 +978,8 @@
             }
         }
 
-        // Initialize app
         const app = new NoteApp();
 
-        // Close modals when clicking outside
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
