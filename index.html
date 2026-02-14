@@ -430,6 +430,9 @@
         <div class="main-content">
             <div class="sidebar">
                 <div class="sort-controls">
+                    <label>Search</label>
+                    <input type="text" id="searchInput" placeholder="Search notes..." style="width: 100%; padding: 8px; border: 2px solid #e5e7eb; border-radius: 6px; margin-bottom: 10px;">
+                    
                     <label>Sort By</label>
                     <div class="sort-buttons">
                         <button class="sort-btn active" data-sort="date" onclick="app.sortNotes('date')">Date</button>
@@ -521,6 +524,7 @@
         class NoteApp {
             constructor() {
                 this.notes = [];
+                this.filteredNotes = [];
                 this.currentNote = null;
                 this.currentSort = 'date';
                 this.sortReverse = true;
@@ -530,6 +534,9 @@
 
                 // Try to load Firebase config
                 this.loadFirebaseConfig();
+                
+                // Set up search listener
+                document.getElementById('searchInput').addEventListener('input', () => this.filterNotes());
                 
                 this.render();
                 this.updateStatus();
@@ -713,7 +720,23 @@
                     });
                 }
 
+                this.filterNotes();
+            }
+
+            filterNotes() {
+                const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
+                
+                if (!searchQuery) {
+                    this.filteredNotes = this.notes.slice();
+                } else {
+                    this.filteredNotes = this.notes.filter(note => 
+                        note.subject.toLowerCase().includes(searchQuery) ||
+                        note.content.toLowerCase().includes(searchQuery)
+                    );
+                }
+                
                 this.renderNotesList();
+                this.updateStatus();
             }
 
             newNote() {
@@ -837,21 +860,35 @@
             renderNotesList() {
                 const container = document.getElementById('notesList');
                 
-                if (this.notes.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-state" style="padding: 40px 20px;">
-                            <div class="empty-state-icon" style="font-size: 48px;">📝</div>
-                            <h3 style="font-size: 16px;">No Notes Yet</h3>
-                            <p style="font-size: 14px;">Click "New Note" to get started</p>
-                        </div>
-                    `;
+                const displayNotes = this.filteredNotes.length > 0 || document.getElementById('searchInput').value ? this.filteredNotes : this.notes;
+                
+                if (displayNotes.length === 0) {
+                    const searchQuery = document.getElementById('searchInput').value;
+                    if (searchQuery) {
+                        container.innerHTML = `
+                            <div class="empty-state" style="padding: 40px 20px;">
+                                <div class="empty-state-icon" style="font-size: 48px;">🔍</div>
+                                <h3 style="font-size: 16px;">No Results Found</h3>
+                                <p style="font-size: 14px;">Try a different search term</p>
+                            </div>
+                        `;
+                    } else {
+                        container.innerHTML = `
+                            <div class="empty-state" style="padding: 40px 20px;">
+                                <div class="empty-state-icon" style="font-size: 48px;">📝</div>
+                                <h3 style="font-size: 16px;">No Notes Yet</h3>
+                                <p style="font-size: 14px;">Click "New Note" to get started</p>
+                            </div>
+                        `;
+                    }
                     return;
                 }
 
-                container.innerHTML = this.notes.map((note, index) => {
+                container.innerHTML = displayNotes.map((note, index) => {
+                    const actualIndex = this.notes.indexOf(note);
                     const priorityClass = `priority-${note.priority.toLowerCase()}`;
                     const date = new Date(note.date).toLocaleDateString();
-                    const isActive = index === this.currentNote ? 'active' : '';
+                    const isActive = actualIndex === this.currentNote ? 'active' : '';
                     const prioritySymbols = {
                         'Low': '●',
                         'Medium': '●●',
@@ -860,7 +897,7 @@
                     };
 
                     return `
-                        <div class="note-item ${isActive}" onclick="app.selectNote(${index})">
+                        <div class="note-item ${isActive}" onclick="app.selectNote(${actualIndex})">
                             <div class="note-priority ${priorityClass}">${prioritySymbols[note.priority]} ${note.priority}</div>
                             <div class="note-subject">${this.escapeHtml(note.subject)}</div>
                             <div class="note-date">${date}</div>
@@ -877,9 +914,19 @@
             }
 
             updateStatus() {
-                const statusText = this.firebaseInitialized 
-                    ? `🔄 Firebase Sync | ${this.notes.length} note${this.notes.length !== 1 ? 's' : ''}`
-                    : `⚠️ Offline | ${this.notes.length} note${this.notes.length !== 1 ? 's' : ''}`;
+                const searchQuery = document.getElementById('searchInput').value.trim();
+                let statusText;
+                
+                if (searchQuery && this.filteredNotes.length !== this.notes.length) {
+                    statusText = this.firebaseInitialized 
+                        ? `🔄 Firebase Sync | Showing ${this.filteredNotes.length} of ${this.notes.length} notes`
+                        : `⚠️ Offline | Showing ${this.filteredNotes.length} of ${this.notes.length} notes`;
+                } else {
+                    statusText = this.firebaseInitialized 
+                        ? `🔄 Firebase Sync | ${this.notes.length} note${this.notes.length !== 1 ? 's' : ''}`
+                        : `⚠️ Offline | ${this.notes.length} note${this.notes.length !== 1 ? 's' : ''}`;
+                }
+                
                 document.getElementById('statusText').textContent = statusText;
             }
 
