@@ -49,6 +49,7 @@
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
+            align-items: center;
         }
 
         .btn {
@@ -90,10 +91,67 @@
             background: #dc2626;
         }
 
+        .btn-google {
+            background: white;
+            color: #374151;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+
+        .btn-google:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: white;
+            font-size: 13px;
+        }
+
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.5);
+        }
+
         .main-content {
             display: flex;
             flex: 1;
             overflow: hidden;
+        }
+
+        /* Login screen */
+        .login-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .login-screen h2 {
+            font-size: 28px;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .login-screen p {
+            color: #6b7280;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .login-icon {
+            font-size: 72px;
+            margin-bottom: 20px;
         }
 
         .sidebar {
@@ -419,37 +477,13 @@
     <div class="container">
         <div class="header">
             <h1>📝 Note Taking App</h1>
-            <div class="header-buttons">
-                <button class="btn btn-primary" onclick="app.newNote()">+ New Note</button>
-                <button class="btn btn-secondary" onclick="app.openImportModal()">Import</button>
-                <button class="btn btn-secondary" onclick="app.exportNotes()">Export</button>
-                <button class="btn btn-secondary" onclick="app.openFirebaseSettings()">Firebase</button>
+            <div class="header-buttons" id="headerButtons">
+                <!-- Buttons injected by JS based on auth state -->
             </div>
         </div>
 
-        <div class="main-content">
-            <div class="sidebar">
-                <div class="sort-controls">
-                    <label>Search</label>
-                    <input type="text" id="searchInput" placeholder="Search notes..." style="width: 100%; padding: 8px; border: 2px solid #e5e7eb; border-radius: 6px; margin-bottom: 10px;">
-                    
-                    <label>Sort By</label>
-                    <div class="sort-buttons">
-                        <button class="sort-btn active" data-sort="date" onclick="app.sortNotes('date')">Date</button>
-                        <button class="sort-btn" data-sort="subject" onclick="app.sortNotes('subject')">Subject</button>
-                        <button class="sort-btn" data-sort="priority" onclick="app.sortNotes('priority')">Priority</button>
-                    </div>
-                </div>
-                <div class="notes-list" id="notesList"></div>
-            </div>
-
-            <div class="editor" id="editor">
-                <div class="empty-state">
-                    <div class="empty-state-icon">📄</div>
-                    <h3>No Note Selected</h3>
-                    <p>Select a note from the list or create a new one</p>
-                </div>
-            </div>
+        <div class="main-content" id="mainContent">
+            <!-- Content injected by JS based on auth state -->
         </div>
 
         <div class="status-bar">
@@ -519,6 +553,7 @@
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
     <script>
         class NoteApp {
@@ -529,17 +564,12 @@
                 this.currentSort = 'date';
                 this.sortReverse = true;
                 this.db = null;
+                this.auth = null;
+                this.currentUser = null;
                 this.firebaseInitialized = false;
                 this.unsubscribe = null;
 
-                // Try to load Firebase config
                 this.loadFirebaseConfig();
-                
-                // Set up search listener
-                document.getElementById('searchInput').addEventListener('input', () => this.filterNotes());
-                
-                this.render();
-                this.updateStatus();
             }
 
             loadFirebaseConfig() {
@@ -550,16 +580,10 @@
                         this.initializeFirebase(firebaseConfig);
                     } catch (e) {
                         console.error('Error loading Firebase config:', e);
-                        this.showFirebaseSetupPrompt();
+                        this.showLoginScreen();
                     }
                 } else {
-                    this.showFirebaseSetupPrompt();
-                }
-            }
-
-            showFirebaseSetupPrompt() {
-                if (confirm('Firebase is not configured. Would you like to set it up now for cloud sync?\n\nYou\'ll need a Firebase project (free at console.firebase.google.com)')) {
-                    this.openFirebaseSettings();
+                    this.showLoginScreen();
                 }
             }
 
@@ -569,47 +593,151 @@
                         firebase.initializeApp(config);
                     }
                     this.db = firebase.firestore();
+                    this.auth = firebase.auth();
                     this.firebaseInitialized = true;
-                    this.startRealtimeSync();
-                    this.updateSyncStatus('connected');
+
+                    // Listen for auth state changes
+                    this.auth.onAuthStateChanged((user) => {
+                        this.currentUser = user;
+                        if (user) {
+                            this.showAppUI();
+                            this.startRealtimeSync();
+                        } else {
+                            this.stopRealtimeSync();
+                            this.showLoginScreen();
+                        }
+                    });
+
                     console.log('Firebase initialized successfully');
                 } catch (error) {
                     console.error('Firebase initialization error:', error);
                     this.updateSyncStatus('offline');
-                    alert('Failed to connect to Firebase. Please check your configuration.');
+                    this.showLoginScreen();
+                }
+            }
+
+            showLoginScreen() {
+                document.getElementById('headerButtons').innerHTML = `
+                    <button class="btn btn-secondary" onclick="app.openFirebaseSettings()">Firebase</button>
+                `;
+                document.getElementById('mainContent').innerHTML = `
+                    <div class="login-screen">
+                        <div class="login-icon">📝</div>
+                        <h2>Welcome to Note Taking App</h2>
+                        <p>Sign in with your Google account to access your notes</p>
+                        <button class="btn btn-google" onclick="app.signInWithGoogle()">
+                            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+                            Sign in with Google
+                        </button>
+                    </div>
+                `;
+                document.getElementById('statusText').textContent = 'Not signed in';
+                document.getElementById('syncStatus').innerHTML = '';
+            }
+
+            showAppUI() {
+                const user = this.currentUser;
+                document.getElementById('headerButtons').innerHTML = `
+                    <button class="btn btn-primary" onclick="app.newNote()">+ New Note</button>
+                    <button class="btn btn-secondary" onclick="app.openImportModal()">Import</button>
+                    <button class="btn btn-secondary" onclick="app.exportNotes()">Export</button>
+                    <button class="btn btn-secondary" onclick="app.openFirebaseSettings()">Firebase</button>
+                    <div class="user-info">
+                        ${user.photoURL ? `<img src="${user.photoURL}" class="user-avatar" alt="avatar">` : ''}
+                        <span>${user.displayName || user.email}</span>
+                        <button class="btn btn-secondary" onclick="app.signOut()" style="padding: 4px 10px; font-size: 12px;">Sign Out</button>
+                    </div>
+                `;
+                document.getElementById('mainContent').innerHTML = `
+                    <div class="sidebar">
+                        <div class="sort-controls">
+                            <label>Search</label>
+                            <input type="text" id="searchInput" placeholder="Search notes..." style="width: 100%; padding: 8px; border: 2px solid #e5e7eb; border-radius: 6px; margin-bottom: 10px;">
+                            <label>Sort By</label>
+                            <div class="sort-buttons">
+                                <button class="sort-btn active" data-sort="date" onclick="app.sortNotes('date')">Date</button>
+                                <button class="sort-btn" data-sort="subject" onclick="app.sortNotes('subject')">Subject</button>
+                                <button class="sort-btn" data-sort="priority" onclick="app.sortNotes('priority')">Priority</button>
+                            </div>
+                        </div>
+                        <div class="notes-list" id="notesList"></div>
+                    </div>
+                    <div class="editor" id="editor">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📄</div>
+                            <h3>No Note Selected</h3>
+                            <p>Select a note from the list or create a new one</p>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('searchInput').addEventListener('input', () => this.filterNotes());
+                this.renderNotesList();
+                this.updateStatus();
+            }
+
+            async signInWithGoogle() {
+                if (!this.firebaseInitialized) {
+                    if (confirm('Firebase is not configured. Would you like to set it up now?\n\nYou\'ll need a Firebase project (free at console.firebase.google.com)')) {
+                        this.openFirebaseSettings();
+                    }
+                    return;
+                }
+                try {
+                    const provider = new firebase.auth.GoogleAuthProvider();
+                    await this.auth.signInWithPopup(provider);
+                } catch (error) {
+                    console.error('Sign in error:', error);
+                    alert('Sign in failed: ' + error.message);
+                }
+            }
+
+            async signOut() {
+                if (this.auth) {
+                    if (this.unsubscribe) {
+                        this.unsubscribe();
+                        this.unsubscribe = null;
+                    }
+                    this.notes = [];
+                    await this.auth.signOut();
+                }
+            }
+
+            stopRealtimeSync() {
+                if (this.unsubscribe) {
+                    this.unsubscribe();
+                    this.unsubscribe = null;
                 }
             }
 
             startRealtimeSync() {
-                if (!this.firebaseInitialized) return;
+                if (!this.firebaseInitialized || !this.currentUser) return;
 
                 this.updateSyncStatus('syncing');
-                
-                this.unsubscribe = this.db.collection('notes').onSnapshot((snapshot) => {
-                    this.notes = [];
-                    snapshot.forEach((doc) => {
-                        this.notes.push({
-                            id: doc.id,
-                            ...doc.data()
+
+                this.unsubscribe = this.db.collection('notes')
+                    .where('userId', '==', this.currentUser.uid)
+                    .onSnapshot((snapshot) => {
+                        this.notes = [];
+                        snapshot.forEach((doc) => {
+                            this.notes.push({ id: doc.id, ...doc.data() });
                         });
+                        this.sortNotes(this.currentSort);
+                        this.updateStatus();
+                        this.updateSyncStatus('connected');
+                    }, (error) => {
+                        console.error('Sync error:', error);
+                        this.updateSyncStatus('offline');
                     });
-                    
-                    this.sortNotes(this.currentSort);
-                    this.updateStatus();
-                    this.updateSyncStatus('connected');
-                }, (error) => {
-                    console.error('Sync error:', error);
-                    this.updateSyncStatus('offline');
-                });
             }
 
             async saveToFirebase(note) {
-                if (!this.firebaseInitialized) return;
+                if (!this.firebaseInitialized || !this.currentUser) return;
 
                 try {
                     this.updateSyncStatus('syncing');
                     const noteData = { ...note };
                     delete noteData.id;
+                    noteData.userId = this.currentUser.uid;
 
                     if (note.id) {
                         await this.db.collection('notes').doc(note.id).set(noteData);
@@ -617,7 +745,6 @@
                         const docRef = await this.db.collection('notes').add(noteData);
                         note.id = docRef.id;
                     }
-                    
                     this.updateSyncStatus('connected');
                 } catch (error) {
                     console.error('Save error:', error);
@@ -672,7 +799,7 @@
                 localStorage.setItem('firebaseConfig', JSON.stringify(config));
                 this.closeModal('firebaseModal');
                 this.initializeFirebase(config);
-                alert('Firebase configured successfully! Your notes will now sync across all devices.');
+                alert('Firebase configured successfully!');
             }
 
             updateSyncStatus(status) {
@@ -682,7 +809,6 @@
                     'syncing': '<span class="spinner">⟳</span> Syncing...',
                     'offline': '⚠️ Offline'
                 };
-                
                 syncStatus.innerHTML = `<span class="sync-status ${status}">${statusMap[status] || 'Unknown'}</span>`;
             }
 
@@ -694,59 +820,43 @@
                     this.sortReverse = true;
                 }
 
-                document.querySelectorAll('.sort-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                document.querySelector(`[data-sort="${sortBy}"]`).classList.add('active');
+                const sortBtns = document.querySelectorAll('.sort-btn');
+                sortBtns.forEach(btn => btn.classList.remove('active'));
+                const activeBtn = document.querySelector(`[data-sort="${sortBy}"]`);
+                if (activeBtn) activeBtn.classList.add('active');
 
                 if (sortBy === 'date') {
-                    this.notes.sort((a, b) => {
-                        return this.sortReverse 
-                            ? new Date(b.date) - new Date(a.date)
-                            : new Date(a.date) - new Date(b.date);
-                    });
+                    this.notes.sort((a, b) => this.sortReverse ? new Date(b.date) - new Date(a.date) : new Date(a.date) - new Date(b.date));
                 } else if (sortBy === 'subject') {
-                    this.notes.sort((a, b) => {
-                        return this.sortReverse
-                            ? b.subject.localeCompare(a.subject)
-                            : a.subject.localeCompare(b.subject);
-                    });
+                    this.notes.sort((a, b) => this.sortReverse ? b.subject.localeCompare(a.subject) : a.subject.localeCompare(b.subject));
                 } else if (sortBy === 'priority') {
                     const priorityOrder = { 'Urgent': 4, 'High': 3, 'Medium': 2, 'Low': 1 };
-                    this.notes.sort((a, b) => {
-                        return this.sortReverse
-                            ? priorityOrder[b.priority] - priorityOrder[a.priority]
-                            : priorityOrder[a.priority] - priorityOrder[b.priority];
-                    });
+                    this.notes.sort((a, b) => this.sortReverse ? priorityOrder[b.priority] - priorityOrder[a.priority] : priorityOrder[a.priority] - priorityOrder[b.priority]);
                 }
 
                 this.filterNotes();
             }
 
             filterNotes() {
-                const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
-                
+                const searchInput = document.getElementById('searchInput');
+                const searchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
                 if (!searchQuery) {
                     this.filteredNotes = this.notes.slice();
                 } else {
-                    this.filteredNotes = this.notes.filter(note => 
+                    this.filteredNotes = this.notes.filter(note =>
                         note.subject.toLowerCase().includes(searchQuery) ||
                         note.content.toLowerCase().includes(searchQuery)
                     );
                 }
-                
+
                 this.renderNotesList();
                 this.updateStatus();
             }
 
             newNote() {
                 this.currentNote = null;
-                this.showEditor({
-                    subject: '',
-                    priority: 'Medium',
-                    content: '',
-                    date: new Date().toISOString()
-                });
+                this.showEditor({ subject: '', priority: 'Medium', content: '', date: new Date().toISOString() });
             }
 
             selectNote(index) {
@@ -760,20 +870,11 @@
                 const priority = document.getElementById('notePriority').value;
                 const content = document.getElementById('noteContent').value.trim();
 
-                if (!subject) {
-                    alert('Please enter a subject');
-                    return;
-                }
-
-                if (!content) {
-                    alert('Please enter content');
-                    return;
-                }
+                if (!subject) { alert('Please enter a subject'); return; }
+                if (!content) { alert('Please enter content'); return; }
 
                 const note = {
-                    subject,
-                    priority,
-                    content,
+                    subject, priority, content,
                     date: this.currentNote !== null ? this.notes[this.currentNote].date : new Date().toISOString()
                 };
 
@@ -795,40 +896,41 @@
             }
 
             async deleteCurrentNote() {
-                if (this.currentNote === null) {
-                    alert('No note selected');
-                    return;
-                }
+                if (this.currentNote === null) { alert('No note selected'); return; }
 
                 if (confirm('Are you sure you want to delete this note?')) {
                     const note = this.notes[this.currentNote];
-                    
                     if (this.firebaseInitialized && note.id) {
                         await this.deleteFromFirebase(note.id);
                     }
-
                     this.notes.splice(this.currentNote, 1);
                     this.currentNote = null;
-                    this.render();
+                    this.renderNotesList();
+                    this.clearEditor();
                     alert('Note deleted successfully!');
                 }
             }
 
             clearEditor() {
                 this.currentNote = null;
-                document.getElementById('editor').innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📄</div>
-                        <h3>No Note Selected</h3>
-                        <p>Select a note from the list or create a new one</p>
-                    </div>
-                `;
+                const editor = document.getElementById('editor');
+                if (editor) {
+                    editor.innerHTML = `
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📄</div>
+                            <h3>No Note Selected</h3>
+                            <p>Select a note from the list or create a new one</p>
+                        </div>
+                    `;
+                }
                 this.renderNotesList();
             }
 
             showEditor(note) {
                 const date = new Date(note.date).toLocaleString();
-                document.getElementById('editor').innerHTML = `
+                const editor = document.getElementById('editor');
+                if (!editor) return;
+                editor.innerHTML = `
                     <div class="form-group">
                         <label>Subject</label>
                         <input type="text" id="noteSubject" value="${this.escapeHtml(note.subject)}" placeholder="Enter subject...">
@@ -859,43 +961,36 @@
 
             renderNotesList() {
                 const container = document.getElementById('notesList');
-                
-                const displayNotes = this.filteredNotes.length > 0 || document.getElementById('searchInput').value ? this.filteredNotes : this.notes;
-                
+                if (!container) return;
+
+                const searchInput = document.getElementById('searchInput');
+                const searchQuery = searchInput ? searchInput.value : '';
+                const displayNotes = this.filteredNotes.length > 0 || searchQuery ? this.filteredNotes : this.notes;
+
                 if (displayNotes.length === 0) {
-                    const searchQuery = document.getElementById('searchInput').value;
-                    if (searchQuery) {
-                        container.innerHTML = `
-                            <div class="empty-state" style="padding: 40px 20px;">
-                                <div class="empty-state-icon" style="font-size: 48px;">🔍</div>
-                                <h3 style="font-size: 16px;">No Results Found</h3>
-                                <p style="font-size: 14px;">Try a different search term</p>
-                            </div>
-                        `;
-                    } else {
-                        container.innerHTML = `
-                            <div class="empty-state" style="padding: 40px 20px;">
-                                <div class="empty-state-icon" style="font-size: 48px;">📝</div>
-                                <h3 style="font-size: 16px;">No Notes Yet</h3>
-                                <p style="font-size: 14px;">Click "New Note" to get started</p>
-                            </div>
-                        `;
-                    }
+                    container.innerHTML = searchQuery ? `
+                        <div class="empty-state" style="padding: 40px 20px;">
+                            <div class="empty-state-icon" style="font-size: 48px;">🔍</div>
+                            <h3 style="font-size: 16px;">No Results Found</h3>
+                            <p style="font-size: 14px;">Try a different search term</p>
+                        </div>
+                    ` : `
+                        <div class="empty-state" style="padding: 40px 20px;">
+                            <div class="empty-state-icon" style="font-size: 48px;">📝</div>
+                            <h3 style="font-size: 16px;">No Notes Yet</h3>
+                            <p style="font-size: 14px;">Click "New Note" to get started</p>
+                        </div>
+                    `;
                     return;
                 }
 
-                container.innerHTML = displayNotes.map((note, index) => {
+                const prioritySymbols = { 'Low': '●', 'Medium': '●●', 'High': '●●●', 'Urgent': '🔴' };
+
+                container.innerHTML = displayNotes.map((note) => {
                     const actualIndex = this.notes.indexOf(note);
                     const priorityClass = `priority-${note.priority.toLowerCase()}`;
                     const date = new Date(note.date).toLocaleDateString();
                     const isActive = actualIndex === this.currentNote ? 'active' : '';
-                    const prioritySymbols = {
-                        'Low': '●',
-                        'Medium': '●●',
-                        'High': '●●●',
-                        'Urgent': '🔴'
-                    };
-
                     return `
                         <div class="note-item ${isActive}" onclick="app.selectNote(${actualIndex})">
                             <div class="note-priority ${priorityClass}">${prioritySymbols[note.priority]} ${note.priority}</div>
@@ -906,41 +1001,24 @@
                 }).join('');
             }
 
-            render() {
-                this.renderNotesList();
-                if (this.currentNote === null) {
-                    this.clearEditor();
-                }
-            }
-
             updateStatus() {
-                const searchQuery = document.getElementById('searchInput').value.trim();
+                const searchInput = document.getElementById('searchInput');
+                const searchQuery = searchInput ? searchInput.value.trim() : '';
                 let statusText;
-                
+
                 if (searchQuery && this.filteredNotes.length !== this.notes.length) {
-                    statusText = this.firebaseInitialized 
-                        ? `🔄 Firebase Sync | Showing ${this.filteredNotes.length} of ${this.notes.length} notes`
-                        : `⚠️ Offline | Showing ${this.filteredNotes.length} of ${this.notes.length} notes`;
+                    statusText = `🔄 Firebase Sync | Showing ${this.filteredNotes.length} of ${this.notes.length} notes`;
                 } else {
-                    statusText = this.firebaseInitialized 
+                    statusText = this.currentUser
                         ? `🔄 Firebase Sync | ${this.notes.length} note${this.notes.length !== 1 ? 's' : ''}`
-                        : `⚠️ Offline | ${this.notes.length} note${this.notes.length !== 1 ? 's' : ''}`;
+                        : `⚠️ Not signed in`;
                 }
-                
                 document.getElementById('statusText').textContent = statusText;
             }
 
             exportNotes() {
-                if (this.notes.length === 0) {
-                    alert('No notes to export');
-                    return;
-                }
-
-                const exportNotes = this.notes.map(note => {
-                    const { id, ...noteWithoutId } = note;
-                    return noteWithoutId;
-                });
-
+                if (this.notes.length === 0) { alert('No notes to export'); return; }
+                const exportNotes = this.notes.map(note => { const { id, userId, ...rest } = note; return rest; });
                 const dataStr = JSON.stringify(exportNotes, null, 2);
                 const dataBlob = new Blob([dataStr], { type: 'application/json' });
                 const url = URL.createObjectURL(dataBlob);
@@ -963,36 +1041,22 @@
                 reader.onload = async (e) => {
                     try {
                         const imported = JSON.parse(e.target.result);
-                        
-                        if (!Array.isArray(imported)) {
-                            alert('Invalid notes file format');
-                            return;
-                        }
+                        if (!Array.isArray(imported)) { alert('Invalid notes file format'); return; }
 
-                        const merge = confirm(
-                            `Found ${imported.length} notes.\n\n` +
-                            'OK: Merge with existing notes\n' +
-                            'Cancel: Replace all existing notes'
-                        );
+                        const merge = confirm(`Found ${imported.length} notes.\n\nOK: Merge with existing notes\nCancel: Replace all existing notes`);
 
                         if (merge) {
                             for (const note of imported) {
                                 note.id = null;
                                 this.notes.push(note);
-                                if (this.firebaseInitialized) {
-                                    await this.saveToFirebase(note);
-                                }
+                                if (this.firebaseInitialized) await this.saveToFirebase(note);
                             }
                         } else {
-                            // Delete all existing
                             if (this.firebaseInitialized) {
                                 for (const note of this.notes) {
-                                    if (note.id) {
-                                        await this.deleteFromFirebase(note.id);
-                                    }
+                                    if (note.id) await this.deleteFromFirebase(note.id);
                                 }
                             }
-                            
                             this.notes = imported;
                             if (this.firebaseInitialized) {
                                 for (const note of this.notes) {
@@ -1029,9 +1093,7 @@
 
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    modal.classList.remove('active');
-                }
+                if (e.target === modal) modal.classList.remove('active');
             });
         });
     </script>
